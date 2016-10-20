@@ -49,8 +49,9 @@
 
 org 0x7c00
 
-jmp init
-nop
+	jmp init
+	nop
+jmp_end:
 
 times 90 - ($ - $$) db BYTE_DONT_CARE
 
@@ -223,5 +224,6 @@ moved_code:
 %include "print.asm"
 moved_code_end:
 
+dw jmp_end - 0x7c00
 dw code_storage - 0x7c00
 dw part_table   - code_storage

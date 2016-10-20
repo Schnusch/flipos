@@ -21,6 +21,7 @@ mbr.img: mbr_chainload_vbr.asm print.asm
 
 vbr.img: vbr.asm print.asm
 	$(YASM) $(strip $(yflags)) -DVBR_SIZE=$(VBR_SIZE) -o "tmp.img" "$<"
-	./copy-code.sh "tmp.img" $(VBR_SIZE)
+	./copy-code.sh "tmp.img" $(VBR_SIZE) -2
+	./verify-fat-vbr.sh "tmp.img"
 	$(TRUNCATE) -s$(VBR_SIZE) "tmp.img"
 	$(MV) "tmp.img" "$@"
