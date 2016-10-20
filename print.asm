@@ -64,6 +64,48 @@ print_hex_ax:
 	int 0x10
 	ret
 
+print_partition:
+	push bp
+	mov bp, sp
+	push ax
+	push bx
+	mov bx, [bp + 4]
+
+	push .printed1_3 ; semi-call .print1_3
+.print1_3:
+	mov ax, [bx]
+	add bx, 2
+	push ax
+	call print_hex_ax.lobyte
+	PRINT_SPACE
+	pop ax
+	mov al, ah
+	call print_hex_ax.byte
+
+.print2:
+	mov ax, [bx]
+	add bx, 2
+	xchg ah, al ; little endian -> big endian
+	call print_hex_ax
+	ret
+.printed1_3:
+
+	PRINT_SPACE
+	call .print1_3
+
+	push .printed_4 ; semi-call print_4
+.print_4:
+	PRINT_SPACE
+	call .print2
+	call .print2
+	ret
+.printed_4:
+	call .print_4
+	pop bx
+	pop ax
+	pop bp
+	; do not return, but print newline
+
 print_crlf:
 	push ax
 	mov ax, 0xe0d
@@ -128,7 +170,7 @@ print:
 .loop:
 	mov al, [bx]
 	test al, al
-	je .break
+	jz .break
 	int 0x10
 	inc bx
 	jmp .loop

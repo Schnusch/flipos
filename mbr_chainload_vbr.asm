@@ -41,9 +41,7 @@ mov_loop:
 
 %ifdef DEBUG
 pre_code:
-	push msg_success
-	call ax
-	add sp, 2
+	CDECL ax, msg_success
 	times ($ - $$) % 2 nop
 .end:
 %endif
@@ -108,8 +106,10 @@ moved_code:
 %include "print.asm"
 
 %ifdef DEBUG
-msg_motd:      db "Code moved to 0x7e00, loading partition 2's VBR...", 0x0d, 0x0a, 0
-msg_success:   db "VBR loaded jumping to 0x7c00", 0x0d, 0x0a, 0
+;msg_motd:      db "Code moved to 0x7e00, loading partition 2's VBR...", 0x0d, 0x0a, 0
+;msg_success:   db "VBR loaded jumping to 0x7c00", 0x0d, 0x0a, 0
+msg_motd:      db "mv 7e", 0x0d, 0x0a, 0
+msg_success:   db "jmp 7c", 0x0d, 0x0a, 0
 %else
 msg_motd:      db "Chainloading 2nd VBR...", 0x0d, 0x0a, 0
 %endif
