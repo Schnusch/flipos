@@ -27,114 +27,104 @@
 ; ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 ; POSSIBILITY OF SUCH DAMAGE.
 
-%macro PRINT_SPACE 0
-	mov ax, 0x0e20
-	int 0x10
-%endmacro
+%include "macro.asm"
 
-ax_to_hex:
-	sar ah, 4
-	and ax, 0x0f0f
-	or ax, 0x3030
-	cmp ah, 0x3a
-	jl .nohex_hi
-	add ah, 0x27
-.nohex_hi:
-	cmp al, 0x3a
-	jl .nohex_lo
-	add al, 0x27
-.nohex_lo:
-	ret
+org 0x7c00
 
-print_hex_ax:
-	push ax
-	mov al, ah
-	call .byte
-	pop ax
-.lobyte:
-	mov ah, al
-.byte: ; 7f
-	call ax_to_hex
-	push ax
-	mov al, ah
-	call .nibble
-	pop ax
-.nibble: ; 89
-	mov ah, 0x0e
-	int 0x10
-	ret
-
-print_crlf:
-	push ax
-	mov ax, 0xe0d
-	int 0x10
-	mov al, 0xa
-	int 0x10
-	pop ax
-	ret
+	mov si, code_storage
+	mov di, moved_code
+	mov cx, (moved_code_end + 1 - moved_code) / 2
+mov_loop:
+	movsw
+	loop mov_loop
+	jmp moved_code
 
 %ifdef DEBUG
-print_hex:
-	push bp
-	mov bp, sp
-	push ax
-	push bx
-	push cx
-	push dx
-	mov bx, [bp + 4]
-	mov cx, [bp + 6]
-	mov dx, 0
-
-.loop:
-	mov ax, [bx]
-	xchg ah, al ; little endian -> big endian
-	call print_hex_ax
-	add bx, 2
-	sub cx, 2
-
-	inc dx
-	test dx, 16
-	jnz .newline
-	; print space
-	mov ax, 0x0e20
-	jmp .loop_cond
-.newline:
-	; print newline
-	mov dx, 0
-	mov ax, 0x0e0d
-	int 0x10
-	mov al, 0x0a
-.loop_cond:
-	int 0x10
-	test cx, cx
-	jne .loop
-
-	pop dx
-	pop cx
-	pop bx
-	pop ax
-	pop bp
-	ret
+pre_code:
+	push msg_success
+	call ax
+	add sp, 2
+	times ($ - $$) % 2 nop
+.end:
 %endif
 
-print:
-	push bp
-	mov bp, sp
-	push ax
-	push bx
-	mov bx, [bp + 4]
-	mov ah, 0x0e
+times ($ - $$) % 2 db 0
+code_storage:
+times 446 - ($ - $$) db 0
 
-.loop:
-	mov al, [bx]
-	test al, al
-	je .break
-	int 0x10
-	inc bx
-	jmp .loop
+part_table:
+times 16 db 0x11
+part2:
+times 8 db 0
+.lba:
+dw 1
+times 6 db 0
+times 16 db 0x33
+times 16 db 0x44
+db 0x55, 0xaa
 
-.break:
-	pop bx
-	pop ax
-	pop bp
-	ret
+moved_code:
+%ifdef DEBUG
+	; move message before 0x7c00
+	mov si, pre_code
+	mov di, 0x7c00 - (pre_code.end - pre_code)
+	mov cx, (pre_code.end - pre_code + 1) / 2
+.move_pre_code:
+	movsw
+	loop .move_pre_code
+%endif
+
+	CDECL print, msg_motd
+
+	; find VBR
+	mov si, part2.lba
+	mov di, dap.lba
+	movsw
+	movsw
+
+	; read VBR
+	mov ax, 0x4200
+	mov si, dap
+	int 0x13
+%ifdef DEBUG
+	pushf
+
+	; dump VBR
+	CDECL print_hex, 0x7c00, 512
+
+	; jump to message on successful read
+	popf
+	mov ax, print
+	jnc 0x7c00 - (pre_code.end - pre_code)
+%else
+	jnc 0x7c00
+%endif
+
+	CDECL print, msg_vbr_error
+.end:
+	hlt
+	jmp .end
+
+%include "print.asm"
+
+%ifdef DEBUG
+msg_motd:      db "Code moved to 0x7e00, loading partition 2's VBR...", 0x0d, 0x0a, 0
+msg_success:   db "VBR loaded jumping to 0x7c00", 0x0d, 0x0a, 0
+%else
+msg_motd:      db "Chainloading 2nd VBR...", 0x0d, 0x0a, 0
+%endif
+msg_vbr_error: db "Failed to read VBR",      0x0d, 0x0a, 0
+
+dap:
+	db 16, 0
+	dw 1      ; 1 sector
+	dw 0x7c00 ; destination offset
+	dw 0      ; destination segment
+.lba:
+	times 4 db 0xff
+	times 4 db 0
+
+moved_code_end:
+
+dw code_storage - 0x7c00
+dw part_table   - code_storage
